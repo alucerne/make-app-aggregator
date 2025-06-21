@@ -1,6 +1,4 @@
-    // This is the full code for your serverless function
     exports.handler = async (event) => {
-        // We only care about the body of the POST request from Make
         if (!event.body) {
             return {
                 statusCode: 400,
@@ -9,27 +7,34 @@
         }
 
         try {
-            // The body from Make will be a JSON string, so we parse it
             const payload = JSON.parse(event.body);
-            const events = payload.events || [];
+            const eventsInput = payload.events || [];
+            let events = [];
 
-            // Use a Map for efficient, unique user storage
+            // This is the new, smarter logic to handle Make's stringification
+            if (typeof eventsInput === 'string') {
+                // If Make sent a string, we fix it by wrapping it in brackets and parsing it
+                const jsonArrayString = `[${eventsInput}]`;
+                events = JSON.parse(jsonArrayString);
+            } else if (Array.isArray(eventsInput)) {
+                // If Make sent a proper array, we use it directly
+                events = eventsInput;
+            }
+
+            // The rest of the aggregation logic remains the same
             const users = new Map();
-
             for (const event of events) {
                 const sha = event.hem_sha256;
-                if (!sha) continue; // Skip events without a sha
+                if (!sha) continue;
 
                 const eventData = {
                     type: event.event_type,
                     url: event.event_data ? event.event_data.url : null
                 };
 
-                // If we haven't seen this user, create their main entry
                 if (!users.has(sha)) {
                     const emails = event.resolution.PERSONAL_EMAILS || "";
                     const firstEmail = emails.split(',')[0].trim();
-
                     users.set(sha, {
                         hem_sha256: sha,
                         first_name: event.resolution.FIRST_NAME,
@@ -38,15 +43,12 @@
                         events: [eventData]
                     });
                 } else {
-                    // If user already exists, just add the new event to their list
                     users.get(sha).events.push(eventData);
                 }
             }
 
-            // Convert the Map of users into the final array
             const aggregated_users = Array.from(users.values());
 
-            // Send the successful response back to Make
             return {
                 statusCode: 200,
                 headers: { 'Content-Type': 'application/json' },
@@ -54,9 +56,10 @@
             };
 
         } catch (error) {
+            // Enhanced error logging to help debug if needed
             return {
                 statusCode: 500,
-                body: JSON.stringify({ error: 'Failed to process events', details: error.message }),
+                body: JSON.stringify({ error: 'Failed to process events', details: error.message, receivedBody: event.body }),
             };
         }
     };
