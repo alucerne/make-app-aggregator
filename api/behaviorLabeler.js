@@ -2,23 +2,34 @@ module.exports = (req, res) => {
     console.log("behaviorLabeler function started.");
 
     if (req.method !== 'POST') {
-        console.log("Method not allowed:", req.method);
         res.setHeader('Allow', ['POST']);
         res.status(405).send('Method Not Allowed');
         return;
     }
 
-    const payload = req.body;
-    console.log("Received payload:", JSON.stringify(payload, null, 2));
+    let payload = req.body;
+    console.log("Received raw payload. Type:", typeof payload);
+    console.log("Payload content:", JSON.stringify(payload, null, 2));
+
+    // If the payload from Make is a string, we need to parse it into an array
+    if (typeof payload === 'string') {
+        try {
+            payload = JSON.parse(payload);
+            console.log("Successfully parsed string payload into an array.");
+        } catch (e) {
+            console.error("Failed to parse payload string:", e);
+            res.status(400).json({ error: "Bad Request: Malformed JSON string in body." });
+            return;
+        }
+    }
 
     if (!Array.isArray(payload)) {
-        console.error("Payload is not an array.");
+        console.error("After potential parsing, payload is still not an array.");
         res.status(400).json({ error: "Bad Request: Expected an array of events." });
         return;
     }
 
     if (payload.length === 0) {
-        console.log("Received empty array, returning empty labels.");
         res.status(200).json({ behavior_labels: [] });
         return;
     }
