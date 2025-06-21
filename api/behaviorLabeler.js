@@ -14,11 +14,15 @@
 
       try {
         const payload = JSON.parse(event.body);
-        const bundles = payload.bundles || [];
+        // The Make module sends the data inside a "bundles" property
+        const bundles = payload.bundles || []; 
         
         const userBehaviors = new Map();
 
         for (const bundle of bundles) {
+          // Add a check to ensure the bundle is a valid object
+          if (typeof bundle !== 'object' || bundle === null) continue;
+
           const resolution = bundle.resolution ?? {};
           const sha256 = getFirstSha(resolution.SHA256_PERSONAL_EMAIL);
           
@@ -31,11 +35,6 @@
           const behaviors = userBehaviors.get(sha256);
           const eventType = bundle.event_type;
 
-          // --- New Behavior Logic Based on Your Event List ---
-
-          // Directly map the event_type to a behavior label.
-          // Using a Set automatically handles duplicates, so if a user has
-          // 5 'page_view' events, they will only get the 'page_view' behavior once.
           if (eventType) {
             behaviors.add(eventType);
           }
@@ -53,6 +52,17 @@
         };
 
       } catch (error) {
-        return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+        // This is the new, enhanced error handling.
+        // It will log the error in Vercel and send a detailed response back to Make.
+        console.error("Function failed with error:", error);
+        return { 
+          statusCode: 500, 
+          body: JSON.stringify({ 
+            error: "An internal server error occurred in the Vercel function.",
+            errorMessage: error.message, 
+            errorStack: error.stack, // This tells us exactly where the code broke
+            receivedBody: event.body
+          }) 
+        };
       }
     };
