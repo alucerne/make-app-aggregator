@@ -4,7 +4,6 @@ module.exports = (req, res) => {
         return res.status(405).send('Method Not Allowed');
     }
 
-    // This code correctly finds the 'fields' array in the request.
     const fields = req.body.fields;
 
     if (!Array.isArray(fields)) {
