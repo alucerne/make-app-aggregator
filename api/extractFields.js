@@ -1,40 +1,47 @@
 module.exports = (req, res) => {
-    // 1. Basic validation
+    console.log("extractFields function started.");
+    console.log("Received request body:", JSON.stringify(req.body, null, 2));
+
     if (req.method !== 'POST') {
         res.setHeader('Allow', ['POST']);
         return res.status(405).send('Method Not Allowed');
     }
 
-    const { fields } = req.body;
+    // This is the fix:
+    // The 'fields' array might be the entire request body, 
+    // or it might be a property named 'fields' within the body. 
+    // This line intelligently handles both possibilities.
+    let fields = Array.isArray(req.body) ? req.body : req.body.fields;
 
     if (!Array.isArray(fields)) {
-        return res.status(400).json({ error: 'Bad Request: The "fields" parameter must be an array.' });
+        console.error("Could not find a valid array of fields in the request.");
+        return res.status(400).json({ 
+            error: 'Bad Request: The "fields" parameter must be an array.',
+            received_body_type: typeof req.body
+        });
     }
 
-    // 2. Main processing logic
+    console.log("Successfully identified fields array to process.");
     const result = {};
 
     for (const field of fields) {
         const { name, inputPath, fieldType } = field;
 
-        // Skip any incomplete field definitions
         if (!name || typeof inputPath === 'undefined' || !fieldType) {
             continue;
         }
 
-        let extractedValue = inputPath; // Default to normal value
+        let extractedValue = inputPath;
 
         try {
             switch (fieldType) {
                 case 'csv':
-                    // Handles "value1, value2, value3" -> "value1"
                     if (typeof inputPath === 'string' && inputPath.length > 0) {
                         extractedValue = inputPath.split(',')[0].trim();
                     }
                     break;
                 
                 case 'array':
-                    // Handles ["Job A, Job B", "Job C"] -> "Job A"
                     if (Array.isArray(inputPath) && inputPath.length > 0) {
                         const firstElement = inputPath[0] || '';
                         extractedValue = firstElement.toString().split(',')[0].trim();
@@ -42,13 +49,13 @@ module.exports = (req, res) => {
                     break;
             }
         } catch (e) {
-            // If any parsing fails, just use the original value as a fallback
-            extractedValue = inputPath;
+            console.error(`Failed to parse field '${name}'. Error: ${e.message}`);
+            extractedValue = inputPath; // Fallback to original value on error
         }
 
         result[name] = extractedValue;
     }
 
-    // 3. Send the final, clean object as the response
+    console.log("Successfully processed all fields. Sending result.");
     res.status(200).json(result);
 };
